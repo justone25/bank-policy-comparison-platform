@@ -33,6 +33,35 @@ pipeline {
 
         // Node.js配置
         NODE_OPTIONS = '--max-old-space-size=4096'
+
+        // Jenkins内置环境变量（确保可用）
+        // 这些变量通常由Jenkins自动提供，这里声明确保可用性
+        WORKSPACE = "${env.WORKSPACE}"
+        BUILD_URL = "${env.BUILD_URL}"
+        JOB_NAME = "${env.JOB_NAME}"
+
+        // Git相关环境变量
+        GIT_COMMIT = "${env.GIT_COMMIT}"
+        GIT_BRANCH = "${env.GIT_BRANCH}"
+
+        // 构建相关环境变量
+        BUILD_NUMBER = "${env.BUILD_NUMBER}"
+        BUILD_ID = "${env.BUILD_ID}"
+        BUILD_TAG = "${env.BUILD_TAG}"
+
+        // 分支相关环境变量
+        BRANCH_NAME = "${env.BRANCH_NAME}"
+        CHANGE_ID = "${env.CHANGE_ID}"
+        CHANGE_URL = "${env.CHANGE_URL}"
+        CHANGE_TITLE = "${env.CHANGE_TITLE}"
+        CHANGE_AUTHOR = "${env.CHANGE_AUTHOR}"
+        CHANGE_AUTHOR_DISPLAY_NAME = "${env.CHANGE_AUTHOR_DISPLAY_NAME}"
+        CHANGE_AUTHOR_EMAIL = "${env.CHANGE_AUTHOR_EMAIL}"
+        CHANGE_TARGET = "${env.CHANGE_TARGET}"
+
+        // 通知配置
+        DEFAULT_EMAIL = 'admin@example.com'
+        NOTIFICATION_EMAIL = "${env.CHANGE_AUTHOR_EMAIL ?: env.DEFAULT_EMAIL}"
     }
 
     // 构建选项
@@ -443,19 +472,17 @@ pipeline {
     // 构建后操作
     post {
         always {
-            // 使用node确保有正确的文件系统上下文
-            node {
-                echo '=== 构建后清理 ==='
-                script {
-                    try {
-                        // 发布构建产物
-                        if (env.BACKEND_JAR_FILE) {
-                            archiveArtifacts artifacts: "${env.BACKEND_JAR_FILE}", fingerprint: true, allowEmptyArchive: true
-                        }
+            echo '=== 构建后清理 ==='
+            script {
+                try {
+                    // 发布构建产物
+                    if (env.BACKEND_JAR_FILE) {
+                        archiveArtifacts artifacts: "${env.BACKEND_JAR_FILE}", fingerprint: true, allowEmptyArchive: true
+                    }
 
-                        // 保存构建日志
-                        echo '保存构建信息...'
-                        writeFile file: 'build-info.txt', text: """
+                    // 保存构建日志
+                    echo '保存构建信息...'
+                    writeFile file: 'build-info.txt', text: """
 构建信息:
 - 项目: ${env.PROJECT_NAME}
 - 分支: ${env.BRANCH_NAME}
@@ -465,26 +492,25 @@ pipeline {
 - 构建时间: ${new Date()}
 - 构建状态: ${currentBuild.result ?: 'SUCCESS'}
 """
-                        archiveArtifacts artifacts: 'build-info.txt', fingerprint: true, allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'build-info.txt', fingerprint: true, allowEmptyArchive: true
 
-                    } catch (Exception e) {
-                        echo "清理过程中出现错误: ${e.getMessage()}"
-                    }
+                } catch (Exception e) {
+                    echo "清理过程中出现错误: ${e.getMessage()}"
                 }
-
-                // 清理工作空间（保留重要文件）
-                cleanWs(
-                    cleanWhenNotBuilt: false,
-                    deleteDirs: true,
-                    disableDeferredWipeout: true,
-                    notFailBuild: true,
-                    patterns: [
-                        [pattern: '.git', type: 'EXCLUDE'],
-                        [pattern: '.m2', type: 'EXCLUDE'],
-                        [pattern: 'node_modules', type: 'EXCLUDE']
-                    ]
-                )
             }
+
+            // 清理工作空间（保留重要文件）
+            cleanWs(
+                cleanWhenNotBuilt: false,
+                deleteDirs: true,
+                disableDeferredWipeout: true,
+                notFailBuild: true,
+                patterns: [
+                    [pattern: '.git', type: 'EXCLUDE'],
+                    [pattern: '.m2', type: 'EXCLUDE'],
+                    [pattern: 'node_modules', type: 'EXCLUDE']
+                ]
+            )
         }
 
         success {
@@ -505,7 +531,7 @@ pipeline {
 <p><strong>详情:</strong> <a href="${env.BUILD_URL}">查看构建详情</a></p>
 """,
                         mimeType: 'text/html',
-                        to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@example.com'}"
+                        to: "${env.NOTIFICATION_EMAIL}"
                     )
                 } catch (Exception e) {
                     echo "发送成功通知失败: ${e.getMessage()}"
@@ -531,7 +557,7 @@ pipeline {
 <p><strong>控制台日志:</strong> <a href="${env.BUILD_URL}console">查看控制台输出</a></p>
 """,
                         mimeType: 'text/html',
-                        to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@example.com'}"
+                        to: "${env.NOTIFICATION_EMAIL}"
                     )
                 } catch (Exception e) {
                     echo "发送失败通知失败: ${e.getMessage()}"
@@ -554,7 +580,7 @@ pipeline {
 <p><strong>详情:</strong> <a href="${env.BUILD_URL}">查看构建详情</a></p>
 """,
                         mimeType: 'text/html',
-                        to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@example.com'}"
+                        to: "${env.NOTIFICATION_EMAIL}"
                     )
                 } catch (Exception e) {
                     echo "发送不稳定通知失败: ${e.getMessage()}"
