@@ -1,0 +1,50 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# IDE settings
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/user-specific-settings.xml
+# For IDEA specific files that should not be committed
+.idea/runConfigurations/*
+.idea/libraries/*
+.idea/*.iml
+.idea/modules/*.iml
+.idea/compiler.xml
+.idea/compilerConfiguration.xml
+.idea/shelf/
+.idea/uiDesigner.xml
+.idea/caches/
+# Log files
+*.log

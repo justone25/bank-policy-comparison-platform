@@ -1,0 +1,319 @@
+services:
+  # Postgresql数据库配置
+  postgres:
+    # 镜像
+    image: postgres:13
+    # 容器名
+    container_name: regulation-postgres
+    # 重启策略
+    restart: unless-stopped # 除非手动停止，否则一直重启
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    # 端口映射
+    ports:
+      - ${POSTGRES_PORT:-5432}:5432
+    # 环境变量
+    environment:
+      # 数据库名称
+      - POSTGRES_DB=${POSTGRES_DB:-regulation_db}
+      # 数据库用户名
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      # 数据库密码
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - TZ=Asia/Shanghai
+      - PGTZ=Asia/Shanghai
+    # 数据库持久化
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/postgres/postgres.conf:/etc/postgresql/postgresql.conf:ro
+      - ./docker/timezone/localtime:/etc/localtime:ro
+      - ./docker/timezone/timezone:/etc/timezone:ro
+    # 网络配置
+    networks:
+      - regulation-network
+    shm_size: 512mb
+    # 健康检查
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # redis
+  redis:
+    image: redis:6.2-alpine
+    container_name: regulation-redis
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - ${REDIS_PORT:-6379}:6379
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./docker/timezone/localtime:/etc/localtime:ro
+      - ./docker/timezone/timezone:/etc/timezone:ro
+    networks:
+      - regulation-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # elasticsearch
+  elasticsearch:
+    build:
+      context: ./docker/elasticsearch
+      dockerfile: Dockerfile
+    container_name: regulation-elasticsearch
+    restart: unless-stopped
+    ports:
+      - ${ELASTICSEARCH_PORT:-9200}:9200
+      - "9300:9300"
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - network.host=0.0.0.0
+      - http.port=9200
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+      - http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
+      - ENABLE_DICT_RELOAD=true
+      - TZ=Asia/Shanghai
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./docker/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+      # 挂载IK分词器配置目录
+      - ./docker/elasticsearch/config/analysis-ik:/usr/share/elasticsearch/plugins/analysis-ik/config:ro
+      - ./docker/timezone/localtime:/etc/localtime:ro
+      - ./docker/timezone/timezone:/etc/timezone:ro
+    networks:
+      - regulation-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # rabbitmq
+  rabbitmq:
+    image: rabbitmq:3.10-management-alpine
+    container_name: regulation-rabbitmq
+    restart: unless-stopped
+    ports:
+      - ${RABBITMQ_PORT:-5672}:5672
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-admin}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-password}
+      - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_VHOST:-regulation}
+      - TZ=Asia/Shanghai
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./docker/timezone/localtime:/etc/localtime:ro
+      - ./docker/timezone/timezone:/etc/timezone:ro
+    networks:
+      - regulation-network
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmqctl status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+
+  # 后端服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+      cache_from:
+        - regulation-backend:development
+    image: regulation-backend:development
+    container_name: regulation-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+      - "${DEBUG_PORT:-5050}:5050"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - TZ=Asia/Shanghai
+      - DB_HOST=postgres
+      - DB_PORT=${POSTGRES_PORT:-5432}
+      - DB_NAME=${POSTGRES_DB:-regulation_db}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-admin}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
+      # JVM远程调试参数
+      - JAVA_OPTS=-Xms512m -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=100
+      - DEBUG_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5050
+
+      # 开发环境特定配置
+      - SPRING_DEVTOOLS_RESTART_ENABLED=true
+      - SPRING_DEVTOOLS_LIVERELOAD_ENABLED=true
+    volumes:
+      - .:/app
+      - maven_cache:/root/.m2
+      - ./logs:/app/logs
+      - ./data/files:/app/data/files
+      - ./docker/timezone/localtime:/etc/localtime:ro
+      - ./docker/timezone/timezone:/etc/timezone:ro
+    networks:
+      - regulation-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      # 检查Spring Boot actuator健康端点
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    # 开发环境标签
+    labels:
+      - "dev.environment=development"
+      - "dev.hot-reload=enabled"
+
+
+
+  # 后端服务 - 生产环境配置（备用）
+  backend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: regulation-backend:production
+    container_name: regulation-backend_prod
+    restart: unless-stopped
+    ports:
+      - "8081:8080"  # 避免与开发环境冲突
+    environment:
+      - SPRING_PROFILES_ACTIVE=production
+      - TZ=Asia/Shanghai
+      - DB_HOST=postgres
+      - DB_PORT=${POSTGRES_PORT:-5432}
+      - DB_NAME=${POSTGRES_DB:-regulation_db}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-admin}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-password}
+      # 生产环境JVM配置
+      - JAVA_OPTS=-Xms1g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs/
+    volumes:
+      - ./logs:/app/logs
+      - ./data/files:/app/data/files
+      - ./docker/timezone/localtime:/etc/localtime:ro
+      - ./docker/timezone/timezone:/etc/timezone:ro
+    networks:
+      - regulation-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - production  # 需要显式激活才会启动
+    labels:
+      - "env.environment=production"
+
+  # 用户端前端
+  frontend-web:
+    build:
+      context: ./frontend/regulation-web   # 前端项目目录
+      dockerfile: Dockerfile
+      target: development
+    container_name: regulation-frontend-web
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_WEB_PORT:-3000}:3000"
+    volumes:
+      # 前端源代码挂载
+      - ./frontend/regulation-web:/app
+      # 排除node_modules避免冲突
+      - /app/node_modules
+      - ./docker/timezone/localtime:/etc/localtime:ro
+      - ./docker/timezone/timezone:/etc/timezone:ro
+    environment:
+      # Vite开发服务器配置
+      - VITE_API_BASE_URL=http://localhost:${BACKEND_PORT:-8080}
+      - VITE_APP_TITLE=监管合规智能系统
+      - TZ=Asia/Shanghai
+    networks:
+      - regulation-network
+    depends_on:
+      - backend
+
+  # 管理端前端
+  frontend-admin:
+    build:
+      context: ./frontend/regulation-admin
+      dockerfile: Dockerfile
+      target: development
+    container_name: regulation-frontend-admin
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_ADMIN_PORT:-3001}:3000"
+    volumes:
+      - ./frontend/regulation-admin:/app
+      - /app/node_modules
+      - ./docker/timezone/localtime:/etc/localtime:ro
+      - ./docker/timezone/timezone:/etc/timezone:ro
+    environment:
+      - VITE_API_BASE_URL=http://localhost:${BACKEND_PORT:-8080}
+      - VITE_APP_TITLE=监管合规系统管理后台
+      - TZ=Asia/Shanghai
+    networks:
+      - regulation-network
+    depends_on:
+      - backend
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  maven_cache:
+    driver: local
+
+networks:
+  regulation-network:
+    driver: bridge
+    ipam: # IP地址管理
+      config:
+        - subnet: 172.20.0.0/16  # 子网配置
