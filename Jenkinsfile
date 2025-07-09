@@ -28,8 +28,8 @@ pipeline {
         FRONTEND_WEB_IMAGE = 'regulation-web'
         FRONTEND_ADMIN_IMAGE = 'regulation-admin'
 
-        // Maven配置
-        MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository -Xmx2048m -XX:MaxPermSize=512m'
+        // Maven配置 (Java 17兼容)
+        MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository -Xmx2048m -XX:MetaspaceSize=256m -XX:MaxMetaspaceSize=512m'
 
         // Node.js配置
         NODE_OPTIONS = '--max-old-space-size=4096'
