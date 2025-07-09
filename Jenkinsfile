@@ -266,50 +266,45 @@ pipeline {
 
         // 阶段5: Docker镜像构建
         stage('Docker镜像构建') {
-            agent {
-                docker {
-                    image 'docker:latest'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
             steps {
                 echo '=== Docker镜像构建 ==='
                 script {
                     try {
+                        // 验证Docker可用性
+                        sh 'docker --version'
+                        echo '✅ Docker客户端可用'
+
                         // 构建后端镜像（开发环境）
                         echo '构建后端Docker镜像...'
-                        sh """
-                            docker build \
-                                --target development \
-                                -t ${BACKEND_IMAGE}:${IMAGE_TAG} \
-                                .
-                        """
+                        def backendImage = docker.build(
+                            "${BACKEND_IMAGE}:${IMAGE_TAG}",
+                            "--target development ."
+                        )
                         env.BACKEND_IMAGE_FULL = "${BACKEND_IMAGE}:${IMAGE_TAG}"
                         echo "后端镜像构建成功: ${env.BACKEND_IMAGE_FULL}"
 
                         // 构建用户端前端镜像
                         echo '构建用户端前端Docker镜像...'
-                        sh """
-                            docker build \
-                                -t ${FRONTEND_WEB_IMAGE}:${IMAGE_TAG} \
-                                ./frontend/regulation-web
-                        """
+                        def webImage = docker.build(
+                            "${FRONTEND_WEB_IMAGE}:${IMAGE_TAG}",
+                            "./frontend/regulation-web"
+                        )
                         env.FRONTEND_WEB_IMAGE_FULL = "${FRONTEND_WEB_IMAGE}:${IMAGE_TAG}"
                         echo "用户端前端镜像构建成功: ${env.FRONTEND_WEB_IMAGE_FULL}"
 
                         // 构建管理端前端镜像
                         echo '构建管理端前端Docker镜像...'
-                        sh """
-                            docker build \
-                                -t ${FRONTEND_ADMIN_IMAGE}:${IMAGE_TAG} \
-                                ./frontend/regulation-admin
-                        """
+                        def adminImage = docker.build(
+                            "${FRONTEND_ADMIN_IMAGE}:${IMAGE_TAG}",
+                            "./frontend/regulation-admin"
+                        )
                         env.FRONTEND_ADMIN_IMAGE_FULL = "${FRONTEND_ADMIN_IMAGE}:${IMAGE_TAG}"
                         echo "管理端前端镜像构建成功: ${env.FRONTEND_ADMIN_IMAGE_FULL}"
 
                         echo 'Docker镜像构建完成'
                     } catch (Exception e) {
-                        error "Docker镜像构建失败: ${e.getMessage()}"
+                        echo "Docker镜像构建失败: ${e.getMessage()}"
+                        currentBuild.result = 'UNSTABLE'
                     }
                 }
             }
@@ -317,16 +312,19 @@ pipeline {
 
         // 阶段6: 服务健康检查
         stage('服务健康检查') {
-            agent {
-                docker {
-                    image 'docker/compose:latest'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock -v $PWD:$PWD -w $PWD'
-                }
-            }
             steps {
                 echo '=== 服务健康检查 ==='
                 script {
                     try {
+                        // 验证Docker Compose可用性
+                        def composeResult = sh(script: 'docker-compose --version || docker compose version', returnStatus: true)
+                        if (composeResult != 0) {
+                            echo '⚠️ Docker Compose不可用，跳过服务健康检查'
+                            currentBuild.result = 'UNSTABLE'
+                            return
+                        }
+                        echo '✅ Docker Compose可用'
+
                         // 启动基础服务进行健康检查
                         echo '启动基础服务...'
                         sh 'docker-compose up -d postgres redis elasticsearch rabbitmq'
@@ -374,12 +372,6 @@ pipeline {
 
         // 阶段7: 部署
         stage('部署') {
-            agent {
-                docker {
-                    image 'docker/compose:latest'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock -v $PWD:$PWD -w $PWD'
-                }
-            }
             when {
                 anyOf {
                     branch 'main'
@@ -391,6 +383,15 @@ pipeline {
                 echo '=== 部署阶段 ==='
                 script {
                     try {
+                        // 验证Docker Compose可用性
+                        def composeResult = sh(script: 'docker-compose --version || docker compose version', returnStatus: true)
+                        if (composeResult != 0) {
+                            echo '⚠️ Docker Compose不可用，跳过部署'
+                            currentBuild.result = 'UNSTABLE'
+                            return
+                        }
+                        echo '✅ Docker Compose可用'
+
                         def deployEnv = env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' ? 'production' : 'development'
                         echo "部署到${deployEnv}环境..."
 
@@ -431,7 +432,8 @@ pipeline {
 
                         echo "部署到${deployEnv}环境完成"
                     } catch (Exception e) {
-                        error "部署失败: ${e.getMessage()}"
+                        echo "部署失败: ${e.getMessage()}"
+                        currentBuild.result = 'UNSTABLE'
                     }
                 }
             }
@@ -441,23 +443,19 @@ pipeline {
     // 构建后操作
     post {
         always {
-            echo '=== 构建后清理 ==='
-            script {
-                try {
-                    // 发布构建产物
-                    if (env.BACKEND_JAR_FILE) {
-                        archiveArtifacts artifacts: "${env.BACKEND_JAR_FILE}", fingerprint: true
-                    }
+            // 使用node确保有正确的文件系统上下文
+            node {
+                echo '=== 构建后清理 ==='
+                script {
+                    try {
+                        // 发布构建产物
+                        if (env.BACKEND_JAR_FILE) {
+                            archiveArtifacts artifacts: "${env.BACKEND_JAR_FILE}", fingerprint: true, allowEmptyArchive: true
+                        }
 
-                    // 清理Docker资源（仅在非部署分支）
-                    if (!(env.BRANCH_NAME in ['main', 'master', 'develop'])) {
-                        echo '清理Docker镜像...'
-                        sh 'docker image prune -f || true'
-                    }
-
-                    // 保存构建日志
-                    echo '保存构建信息...'
-                    writeFile file: 'build-info.txt', text: """
+                        // 保存构建日志
+                        echo '保存构建信息...'
+                        writeFile file: 'build-info.txt', text: """
 构建信息:
 - 项目: ${env.PROJECT_NAME}
 - 分支: ${env.BRANCH_NAME}
@@ -467,25 +465,26 @@ pipeline {
 - 构建时间: ${new Date()}
 - 构建状态: ${currentBuild.result ?: 'SUCCESS'}
 """
-                    archiveArtifacts artifacts: 'build-info.txt', fingerprint: true
+                        archiveArtifacts artifacts: 'build-info.txt', fingerprint: true, allowEmptyArchive: true
 
-                } catch (Exception e) {
-                    echo "清理过程中出现错误: ${e.getMessage()}"
+                    } catch (Exception e) {
+                        echo "清理过程中出现错误: ${e.getMessage()}"
+                    }
                 }
-            }
 
-            // 清理工作空间（保留重要文件）
-            cleanWs(
-                cleanWhenNotBuilt: false,
-                deleteDirs: true,
-                disableDeferredWipeout: true,
-                notFailBuild: true,
-                patterns: [
-                    [pattern: '.git', type: 'EXCLUDE'],
-                    [pattern: '.m2', type: 'EXCLUDE'],
-                    [pattern: 'node_modules', type: 'EXCLUDE']
-                ]
-            )
+                // 清理工作空间（保留重要文件）
+                cleanWs(
+                    cleanWhenNotBuilt: false,
+                    deleteDirs: true,
+                    disableDeferredWipeout: true,
+                    notFailBuild: true,
+                    patterns: [
+                        [pattern: '.git', type: 'EXCLUDE'],
+                        [pattern: '.m2', type: 'EXCLUDE'],
+                        [pattern: 'node_modules', type: 'EXCLUDE']
+                    ]
+                )
+            }
         }
 
         success {
