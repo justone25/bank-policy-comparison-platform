@@ -184,42 +184,42 @@ pipeline {
             }
         }
 
-        // 阶段3: 单元测试
-        stage('单元测试') {
-            parallel {
-                stage('后端测试') {
-                    steps {
-                        echo '=== 后端单元测试 ==='
-                        script {
-                            try {
-                                sh 'mvn test -q'
-                                echo '后端单元测试通过'
-                            } catch (Exception e) {
-                                error "后端单元测试失败: ${e.getMessage()}"
-                            }
-                        }
+        // 阶段3: 后端单元测试
+        stage('后端单元测试') {
+            steps {
+                echo '=== 后端单元测试 ==='
+                script {
+                    try {
+                        sh 'mvn test -q'
+                        echo '后端单元测试通过'
+                    } catch (Exception e) {
+                        error "后端单元测试失败: ${e.getMessage()}"
                     }
-                    post {
-                        always {
-                            // 发布测试报告
-                            script {
-                                try {
-                                    publishTestResults(
-                                        testResultsPattern: '**/target/surefire-reports/*.xml',
-                                        allowEmptyResults: true
-                                    )
-                                    echo '测试报告发布成功'
-                                } catch (Exception e) {
-                                    echo "测试报告发布失败: ${e.getMessage()}"
-                                }
-                            }
+                }
+            }
+            post {
+                always {
+                    // 发布测试报告
+                    script {
+                        try {
+                            publishTestResults(
+                                testResultsPattern: '**/target/surefire-reports/*.xml',
+                                allowEmptyResults: true
+                            )
+                            echo '测试报告发布成功'
+                        } catch (Exception e) {
+                            echo "测试报告发布失败: ${e.getMessage()}"
                         }
                     }
                 }
-                stage('前端测试') {
-                    steps {
-                        echo '=== 前端单元测试 ==='
-                        script {
+            }
+        }
+
+        // 阶段4: 前端单元测试
+        stage('前端单元测试') {
+            steps {
+                echo '=== 前端单元测试 ==='
+                script {
                             // 测试用户端前端
                             dir('frontend/regulation-web') {
                                 try {
@@ -263,13 +263,11 @@ pipeline {
                                     currentBuild.result = 'UNSTABLE'
                                 }
                             }
-                        }
-                    }
                 }
             }
         }
 
-        // 阶段4: 构建应用
+        // 阶段5: 构建应用
         stage('构建应用') {
             parallel {
                 stage('后端构建') {
@@ -328,7 +326,7 @@ pipeline {
             }
         }
 
-        // 阶段5: Docker镜像构建
+        // 阶段6: Docker镜像构建
         stage('Docker镜像构建') {
             steps {
                 echo '=== Docker镜像构建 ==='
@@ -374,7 +372,7 @@ pipeline {
             }
         }
 
-        // 阶段6: 服务健康检查
+        // 阶段7: 服务健康检查
         stage('服务健康检查') {
             steps {
                 echo '=== 服务健康检查 ==='
@@ -434,7 +432,7 @@ pipeline {
             }
         }
 
-        // 阶段7: 部署
+        // 阶段8: 部署
         stage('部署') {
             when {
                 anyOf {
