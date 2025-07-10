@@ -202,8 +202,8 @@ pipeline {
                     // 发布测试报告
                     script {
                         try {
-                            publishTestResults(
-                                testResultsPattern: '**/target/surefire-reports/*.xml',
+                            junit(
+                                testResults: '**/target/surefire-reports/*.xml',
                                 allowEmptyResults: true
                             )
                             echo '测试报告发布成功'
