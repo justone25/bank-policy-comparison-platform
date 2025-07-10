@@ -202,13 +202,25 @@ pipeline {
                     // 发布测试报告
                     script {
                         try {
-                            junit(
-                                testResults: '**/target/surefire-reports/*.xml',
-                                allowEmptyResults: true
-                            )
-                            echo '测试报告发布成功'
+                            // 检查是否存在测试报告文件
+                            def testReportFiles = sh(
+                                script: 'find . -path "*/target/surefire-reports/*.xml" -type f 2>/dev/null | wc -l',
+                                returnStdout: true
+                            ).trim().toInteger()
+
+                            if (testReportFiles > 0) {
+                                echo "发现 ${testReportFiles} 个测试报告文件"
+                                junit(
+                                    testResults: '**/target/surefire-reports/*.xml',
+                                    allowEmptyResults: true
+                                )
+                                echo '测试报告发布成功'
+                            } else {
+                                echo '未发现测试报告文件，可能项目中没有测试用例'
+                                echo '提示：请在各模块的 src/test/java 目录下添加测试文件'
+                            }
                         } catch (Exception e) {
-                            echo "测试报告发布失败: ${e.getMessage()}"
+                            echo "测试报告处理失败: ${e.getMessage()}"
                         }
                     }
                 }

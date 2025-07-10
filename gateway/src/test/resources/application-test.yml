@@ -1,0 +1,43 @@
+# 测试环境配置
+spring:
+  profiles:
+    active: test
+  
+  # 数据源配置（测试环境使用内存数据库）
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  
+  # H2控制台（测试环境可启用）
+  h2:
+    console:
+      enabled: true
+  
+  # 日志配置
+  logging:
+    level:
+      life.ljs: DEBUG
+      org.springframework: WARN
+      org.hibernate: WARN
+  
+# 服务器配置
+server:
+  port: 0  # 随机端口，避免测试时端口冲突
+
+# 测试专用配置
+test:
+  mock:
+    enabled: true
+  data:
+    cleanup: true
