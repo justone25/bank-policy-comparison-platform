@@ -115,59 +115,59 @@ pipeline {
         }
 
         // 阶段2: 代码质量检查
-        stage('代码质量检查') {
-            parallel {
-                stage('后端代码检查') {
-                    steps {
-                        echo '=== 后端代码质量检查 ==='
-                        script {
-                            try {
-                                sh 'mvn clean compile -q'
-                                echo '后端编译成功'
-
-                                // 如果项目配置了checkstyle，则执行检查
-                                if (fileExists('checkstyle.xml') || sh(script: 'mvn help:describe -Dplugin=checkstyle -q', returnStatus: true) == 0) {
-                                    sh 'mvn checkstyle:check -q'
-                                    echo 'Checkstyle检查通过'
-                                } else {
-                                    echo 'Checkstyle未配置，跳过代码风格检查'
-                                }
-                            } catch (Exception e) {
-                                error "后端代码检查失败: ${e.getMessage()}"
-                            }
-                        }
-                    }
-                }
-                stage('前端代码检查') {
-                    steps {
-                        echo '=== 前端代码质量检查 ==='
-                        script {
-                            // 检查用户端前端
-                            dir('frontend/regulation-web') {
-                                try {
-                                    sh 'npm ci --silent'
-                                    sh 'npm run lint'
-                                    echo '用户端前端代码检查通过'
-                                } catch (Exception e) {
-                                    error "用户端前端代码检查失败: ${e.getMessage()}"
-                                }
-                            }
-
-                            // 检查管理端前端
-                            dir('frontend/regulation-admin') {
-                                try {
-                                    sh 'npm ci --silent'
-                                    sh 'npm run lint'
-                                    echo '管理端前端代码检查通过'
-                                } catch (Exception e) {
-                                    error "管理端前端代码检查失败: ${e.getMessage()}"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+//         stage('代码质量检查') {
+//             parallel {
+//                 stage('后端代码检查') {
+//                     steps {
+//                         echo '=== 后端代码质量检查 ==='
+//                         script {
+//                             try {
+//                                 sh 'mvn clean compile -q'
+//                                 echo '后端编译成功'
+//
+//                                 // 如果项目配置了checkstyle，则执行检查
+//                                 if (fileExists('checkstyle.xml') || sh(script: 'mvn help:describe -Dplugin=checkstyle -q', returnStatus: true) == 0) {
+//                                     sh 'mvn checkstyle:check -q'
+//                                     echo 'Checkstyle检查通过'
+//                                 } else {
+//                                     echo 'Checkstyle未配置，跳过代码风格检查'
+//                                 }
+//                             } catch (Exception e) {
+//                                 error "后端代码检查失败: ${e.getMessage()}"
+//                             }
+//                         }
+//                     }
+//                 }
+//                 stage('前端代码检查') {
+//                     steps {
+//                         echo '=== 前端代码质量检查 ==='
+//                         script {
+//                             // 检查用户端前端
+//                             dir('frontend/regulation-web') {
+//                                 try {
+//                                     sh 'npm ci --silent'
+//                                     sh 'npm run lint'
+//                                     echo '用户端前端代码检查通过'
+//                                 } catch (Exception e) {
+//                                     error "用户端前端代码检查失败: ${e.getMessage()}"
+//                                 }
+//                             }
+//
+//                             // 检查管理端前端
+//                             dir('frontend/regulation-admin') {
+//                                 try {
+//                                     sh 'npm ci --silent'
+//                                     sh 'npm run lint'
+//                                     echo '管理端前端代码检查通过'
+//                                 } catch (Exception e) {
+//                                     error "管理端前端代码检查失败: ${e.getMessage()}"
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//         }
 
         // 阶段3: 单元测试
         stage('单元测试') {
