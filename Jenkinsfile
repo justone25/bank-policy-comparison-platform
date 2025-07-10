@@ -169,6 +169,21 @@ pipeline {
 //             }
 //         }
 
+        // 阶段2: 编译检查
+        stage('编译检查') {
+            steps {
+                echo '=== 编译检查阶段 ==='
+                script {
+                    try {
+                        sh 'mvn clean compile -q'
+                        echo '后端编译成功'
+                    } catch (Exception e) {
+                        error "后端编译失败: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+
         // 阶段3: 单元测试
         stage('单元测试') {
             parallel {
@@ -208,8 +223,18 @@ pipeline {
                             // 测试用户端前端
                             dir('frontend/regulation-web') {
                                 try {
-                                    sh 'npm run test:unit'
-                                    echo '用户端前端测试通过'
+                                    echo '开始用户端前端测试...'
+                                    // 确保依赖已安装
+                                    sh 'npm ci --silent'
+                                    // 检查package.json中是否有test:unit脚本
+                                    def packageJson = readJSON file: 'package.json'
+                                    if (packageJson.scripts && packageJson.scripts['test:unit']) {
+                                        // 运行测试（设置为非交互模式）
+                                        sh 'npm run test:unit -- --run'
+                                        echo '用户端前端测试通过'
+                                    } else {
+                                        echo '用户端前端未配置test:unit脚本，跳过测试'
+                                    }
                                 } catch (Exception e) {
                                     echo "用户端前端测试失败: ${e.getMessage()}"
                                     // 前端测试失败不阻断构建，但记录警告
@@ -220,8 +245,18 @@ pipeline {
                             // 测试管理端前端
                             dir('frontend/regulation-admin') {
                                 try {
-                                    sh 'npm run test:unit'
-                                    echo '管理端前端测试通过'
+                                    echo '开始管理端前端测试...'
+                                    // 确保依赖已安装
+                                    sh 'npm ci --silent'
+                                    // 检查package.json中是否有test:unit脚本
+                                    def packageJson = readJSON file: 'package.json'
+                                    if (packageJson.scripts && packageJson.scripts['test:unit']) {
+                                        // 运行测试（设置为非交互模式）
+                                        sh 'npm run test:unit -- --run'
+                                        echo '管理端前端测试通过'
+                                    } else {
+                                        echo '管理端前端未配置test:unit脚本，跳过测试'
+                                    }
                                 } catch (Exception e) {
                                     echo "管理端前端测试失败: ${e.getMessage()}"
                                     // 前端测试失败不阻断构建，但记录警告
