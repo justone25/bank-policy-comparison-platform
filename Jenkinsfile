@@ -1,14 +1,6 @@
 pipeline {
     agent any
 
-    // 可选：使用Docker agent（如果Jenkins没有直接Docker权限）
-    // agent {
-    //     docker {
-    //         image 'maven:3.9.5-eclipse-temurin-17'
-    //         args '-v /var/run/docker.sock:/var/run/docker.sock -v $HOME/.m2:/root/.m2'
-    //     }
-    // }
-
     // 工具版本配置
     tools {
         maven 'Maven-3.9.5'
@@ -34,34 +26,9 @@ pipeline {
         // Node.js配置
         NODE_OPTIONS = '--max-old-space-size=4096'
 
-        // Jenkins内置环境变量（确保可用）
-        // 这些变量通常由Jenkins自动提供，这里声明确保可用性
-        WORKSPACE = "${env.WORKSPACE}"
-        BUILD_URL = "${env.BUILD_URL}"
-        JOB_NAME = "${env.JOB_NAME}"
-
-        // Git相关环境变量
-        GIT_COMMIT = "${env.GIT_COMMIT}"
-        GIT_BRANCH = "${env.GIT_BRANCH}"
-
-        // 构建相关环境变量
-        BUILD_NUMBER = "${env.BUILD_NUMBER}"
-        BUILD_ID = "${env.BUILD_ID}"
-        BUILD_TAG = "${env.BUILD_TAG}"
-
-        // 分支相关环境变量
-        BRANCH_NAME = "${env.BRANCH_NAME}"
-        CHANGE_ID = "${env.CHANGE_ID}"
-        CHANGE_URL = "${env.CHANGE_URL}"
-        CHANGE_TITLE = "${env.CHANGE_TITLE}"
-        CHANGE_AUTHOR = "${env.CHANGE_AUTHOR}"
-        CHANGE_AUTHOR_DISPLAY_NAME = "${env.CHANGE_AUTHOR_DISPLAY_NAME}"
-        CHANGE_AUTHOR_EMAIL = "${env.CHANGE_AUTHOR_EMAIL}"
-        CHANGE_TARGET = "${env.CHANGE_TARGET}"
-
         // 通知配置
         DEFAULT_EMAIL = 'admin@example.com'
-        NOTIFICATION_EMAIL = "${env.CHANGE_AUTHOR_EMAIL ?: env.DEFAULT_EMAIL}"
+        NOTIFICATION_EMAIL = "${env.CHANGE_AUTHOR_EMAIL ?: (env.GIT_AUTHOR_EMAIL ?: env.DEFAULT_EMAIL)}"
     }
 
     // 构建选项
@@ -115,61 +82,61 @@ pipeline {
         }
 
         // 阶段2: 代码质量检查
-//         stage('代码质量检查') {
-//             parallel {
-//                 stage('后端代码检查') {
-//                     steps {
-//                         echo '=== 后端代码质量检查 ==='
-//                         script {
-//                             try {
-//                                 sh 'mvn clean compile -q'
-//                                 echo '后端编译成功'
-//
-//                                 // 如果项目配置了checkstyle，则执行检查
-//                                 if (fileExists('checkstyle.xml') || sh(script: 'mvn help:describe -Dplugin=checkstyle -q', returnStatus: true) == 0) {
-//                                     sh 'mvn checkstyle:check -q'
-//                                     echo 'Checkstyle检查通过'
-//                                 } else {
-//                                     echo 'Checkstyle未配置，跳过代码风格检查'
-//                                 }
-//                             } catch (Exception e) {
-//                                 error "后端代码检查失败: ${e.getMessage()}"
-//                             }
-//                         }
-//                     }
-//                 }
-//                 stage('前端代码检查') {
-//                     steps {
-//                         echo '=== 前端代码质量检查 ==='
-//                         script {
-//                             // 检查用户端前端
-//                             dir('frontend/regulation-web') {
-//                                 try {
-//                                     sh 'npm ci --silent'
-//                                     sh 'npm run lint'
-//                                     echo '用户端前端代码检查通过'
-//                                 } catch (Exception e) {
-//                                     error "用户端前端代码检查失败: ${e.getMessage()}"
-//                                 }
-//                             }
-//
-//                             // 检查管理端前端
-//                             dir('frontend/regulation-admin') {
-//                                 try {
-//                                     sh 'npm ci --silent'
-//                                     sh 'npm run lint'
-//                                     echo '管理端前端代码检查通过'
-//                                 } catch (Exception e) {
-//                                     error "管理端前端代码检查失败: ${e.getMessage()}"
-//                                 }
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         }
+        stage('代码质量检查') {
+            parallel {
+                stage('后端代码检查') {
+                    steps {
+                        echo '=== 后端代码质量检查 ==='
+                        script {
+                            try {
+                                sh 'mvn clean compile -q'
+                                echo '后端编译成功'
 
-        // 阶段2: 编译检查
+                                // 如果项目配置了checkstyle，则执行检查
+                                if (fileExists('checkstyle.xml') || sh(script: 'mvn help:describe -Dplugin=checkstyle -q', returnStatus: true) == 0) {
+                                    sh 'mvn checkstyle:check -q'
+                                    echo 'Checkstyle检查通过'
+                                } else {
+                                    echo 'Checkstyle未配置，跳过代码风格检查'
+                                }
+                            } catch (Exception e) {
+                                error "后端代码检查失败: ${e.getMessage()}"
+                            }
+                        }
+                    }
+                }
+                stage('前端代码检查') {
+                    steps {
+                        echo '=== 前端代码质量检查 ==='
+                        script {
+                            // 检查用户端前端
+                            dir('frontend/regulation-web') {
+                                try {
+                                    sh 'npm ci --silent'
+                                    sh 'npm run lint'
+                                    echo '用户端前端代码检查通过'
+                                } catch (Exception e) {
+                                    error "用户端前端代码检查失败: ${e.getMessage()}"
+                                }
+                            }
+
+                            // 检查管理端前端
+                            dir('frontend/regulation-admin') {
+                                try {
+                                    sh 'npm ci --silent'
+                                    sh 'npm run lint'
+                                    echo '管理端前端代码检查通过'
+                                } catch (Exception e) {
+                                    error "管理端前端代码检查失败: ${e.getMessage()}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 阶段3: 编译检查
         stage('编译检查') {
             steps {
                 echo '=== 编译检查阶段 ==='
@@ -184,7 +151,7 @@ pipeline {
             }
         }
 
-        // 阶段3: 后端单元测试
+        // 阶段4: 后端单元测试
         stage('后端单元测试') {
             steps {
                 echo '=== 后端单元测试 ==='
@@ -227,59 +194,53 @@ pipeline {
             }
         }
 
-        // 阶段4: 前端单元测试
+        // 阶段5: 前端单元测试
         stage('前端单元测试') {
             steps {
                 echo '=== 前端单元测试 ==='
                 script {
-                            // 测试用户端前端
-                            dir('frontend/regulation-web') {
-                                try {
-                                    echo '开始用户端前端测试...'
-                                    // 确保依赖已安装
-                                    sh 'npm ci --silent'
-                                    // 检查package.json中是否有test:unit脚本
-                                    def packageJson = readJSON file: 'package.json'
-                                    if (packageJson.scripts && packageJson.scripts['test:unit']) {
-                                        // 运行测试（设置为非交互模式）
-                                        sh 'npm run test:unit -- --run'
-                                        echo '用户端前端测试通过'
-                                    } else {
-                                        echo '用户端前端未配置test:unit脚本，跳过测试'
-                                    }
-                                } catch (Exception e) {
-                                    echo "用户端前端测试失败: ${e.getMessage()}"
-                                    // 前端测试失败不阻断构建，但记录警告
-                                    currentBuild.result = 'UNSTABLE'
-                                }
+                    // 测试用户端前端
+                    dir('frontend/regulation-web') {
+                        try {
+                            echo '开始用户端前端测试...'
+                            sh 'npm ci --silent'
+                            // 检查package.json中是否有test:unit脚本
+                            def packageJson = readJSON file: 'package.json'
+                            if (packageJson.scripts && packageJson.scripts['test:unit']) {
+                                sh 'npm run test:unit'  // 标准化为CI模式
+                                echo '用户端前端测试通过'
+                            } else {
+                                echo '用户端前端未配置test:unit脚本，跳过测试'
                             }
+                        } catch (Exception e) {
+                            echo "用户端前端测试失败: ${e.getMessage()}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
 
-                            // 测试管理端前端
-                            dir('frontend/regulation-admin') {
-                                try {
-                                    echo '开始管理端前端测试...'
-                                    // 确保依赖已安装
-                                    sh 'npm ci --silent'
-                                    // 检查package.json中是否有test:unit脚本
-                                    def packageJson = readJSON file: 'package.json'
-                                    if (packageJson.scripts && packageJson.scripts['test:unit']) {
-                                        // 运行测试（设置为非交互模式）
-                                        sh 'npm run test:unit -- --run'
-                                        echo '管理端前端测试通过'
-                                    } else {
-                                        echo '管理端前端未配置test:unit脚本，跳过测试'
-                                    }
-                                } catch (Exception e) {
-                                    echo "管理端前端测试失败: ${e.getMessage()}"
-                                    // 前端测试失败不阻断构建，但记录警告
-                                    currentBuild.result = 'UNSTABLE'
-                                }
+                    // 测试管理端前端
+                    dir('frontend/regulation-admin') {
+                        try {
+                            echo '开始管理端前端测试...'
+                            sh 'npm ci --silent'
+                            // 检查package.json中是否有test:unit脚本
+                            def packageJson = readJSON file: 'package.json'
+                            if (packageJson.scripts && packageJson.scripts['test:unit']) {
+                                sh 'npm run test:unit'  // 标准化为CI模式
+                                echo '管理端前端测试通过'
+                            } else {
+                                echo '管理端前端未配置test:unit脚本，跳过测试'
                             }
+                        } catch (Exception e) {
+                            echo "管理端前端测试失败: ${e.getMessage()}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
                 }
             }
         }
 
-        // 阶段5: 构建应用
+        // 阶段6: 构建应用
         stage('构建应用') {
             parallel {
                 stage('后端构建') {
@@ -287,10 +248,10 @@ pipeline {
                         echo '=== 后端应用构建 ==='
                         script {
                             try {
-                                // 构建gateway模块及其依赖
-                                sh 'mvn clean package -pl gateway -am -DskipTests -q'
+                                // 构建整个项目
+                                sh 'mvn clean package -DskipTests -q'
 
-                                // 验证构建结果
+                                // 验证构建结果（假设gateway是主要模块，调整为实际主JAR）
                                 def jarFile = sh(
                                     script: 'find gateway/target -name "*.jar" -not -name "*sources.jar" -not -name "*javadoc.jar" | head -1',
                                     returnStdout: true
@@ -315,6 +276,7 @@ pipeline {
                             // 构建用户端前端
                             dir('frontend/regulation-web') {
                                 try {
+                                    sh 'npm ci --silent'
                                     sh 'npm run build'
                                     echo '用户端前端构建成功'
                                 } catch (Exception e) {
@@ -338,7 +300,7 @@ pipeline {
             }
         }
 
-        // 阶段6: Docker镜像构建
+        // 阶段7: Docker镜像构建
         stage('Docker镜像构建') {
             steps {
                 echo '=== Docker镜像构建 ==='
@@ -348,11 +310,11 @@ pipeline {
                         sh 'docker --version'
                         echo '✅ Docker客户端可用'
 
-                        // 构建后端镜像（开发环境）
+                        // 构建后端镜像（开发环境，指定Dockerfile）
                         echo '构建后端Docker镜像...'
                         def backendImage = docker.build(
                             "${BACKEND_IMAGE}:${IMAGE_TAG}",
-                            "--target development ."
+                            "-f Dockerfile --target development ."
                         )
                         env.BACKEND_IMAGE_FULL = "${BACKEND_IMAGE}:${IMAGE_TAG}"
                         echo "后端镜像构建成功: ${env.BACKEND_IMAGE_FULL}"
@@ -361,7 +323,7 @@ pipeline {
                         echo '构建用户端前端Docker镜像...'
                         def webImage = docker.build(
                             "${FRONTEND_WEB_IMAGE}:${IMAGE_TAG}",
-                            "./frontend/regulation-web"
+                            "-f frontend/regulation-web/Dockerfile ./frontend/regulation-web"
                         )
                         env.FRONTEND_WEB_IMAGE_FULL = "${FRONTEND_WEB_IMAGE}:${IMAGE_TAG}"
                         echo "用户端前端镜像构建成功: ${env.FRONTEND_WEB_IMAGE_FULL}"
@@ -370,21 +332,46 @@ pipeline {
                         echo '构建管理端前端Docker镜像...'
                         def adminImage = docker.build(
                             "${FRONTEND_ADMIN_IMAGE}:${IMAGE_TAG}",
-                            "./frontend/regulation-admin"
+                            "-f frontend/regulation-admin/Dockerfile ./frontend/regulation-admin"
                         )
                         env.FRONTEND_ADMIN_IMAGE_FULL = "${FRONTEND_ADMIN_IMAGE}:${IMAGE_TAG}"
                         echo "管理端前端镜像构建成功: ${env.FRONTEND_ADMIN_IMAGE_FULL}"
 
                         echo 'Docker镜像构建完成'
                     } catch (Exception e) {
-                        echo "Docker镜像构建失败: ${e.getMessage()}"
-                        currentBuild.result = 'UNSTABLE'
+                        error "Docker镜像构建失败: ${e.getMessage()}"
                     }
                 }
             }
         }
 
-        // 阶段7: 服务健康检查
+        // 阶段8: Docker镜像推送
+        stage('Docker镜像推送') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'master'
+                    branch 'develop'
+                }
+            }
+            steps {
+                echo '=== Docker镜像推送 ==='
+                script {
+                    try {
+                        docker.withRegistry("https://${env.DOCKER_REGISTRY}", 'registry-credentials-id') {  // 假设Jenkins有此凭证ID
+                            docker.image(env.BACKEND_IMAGE_FULL).push()
+                            docker.image(env.FRONTEND_WEB_IMAGE_FULL).push()
+                            docker.image(env.FRONTEND_ADMIN_IMAGE_FULL).push()
+                            echo '镜像推送成功'
+                        }
+                    } catch (Exception e) {
+                        error "镜像推送失败: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+
+        // 阶段9: 服务健康检查
         stage('服务健康检查') {
             steps {
                 echo '=== 服务健康检查 ==='
@@ -403,23 +390,24 @@ pipeline {
                         echo '启动基础服务...'
                         sh 'docker-compose up -d postgres redis elasticsearch rabbitmq'
 
-                        // 等待服务启动
+                        // 等待服务启动（增加等待时间）
                         echo '等待服务启动...'
-                        sleep(time: 60, unit: 'SECONDS')
+                        sleep(time: 120, unit: 'SECONDS')
 
-                        // 检查服务健康状态
+                        // 检查服务健康状态（使用更精确的方法）
                         echo '检查服务健康状态...'
                         def services = ['postgres', 'redis', 'elasticsearch', 'rabbitmq']
                         services.each { service ->
                             def healthStatus = sh(
-                                script: "docker-compose ps ${service} | grep 'healthy\\|Up' || echo 'unhealthy'",
+                                script: "docker inspect --format '{{.State.Health.Status}}' \$(docker-compose ps -q ${service}) || echo 'unhealthy'",
                                 returnStdout: true
                             ).trim()
 
-                            if (healthStatus.contains('healthy') || healthStatus.contains('Up')) {
+                            if (healthStatus == 'healthy' || healthStatus == 'running') {
                                 echo "${service} 服务健康"
                             } else {
-                                echo "警告: ${service} 服务可能未正常启动"
+                                echo "警告: ${service} 服务可能未正常启动: ${healthStatus}"
+                                currentBuild.result = 'UNSTABLE'
                             }
                         }
 
@@ -444,7 +432,7 @@ pipeline {
             }
         }
 
-        // 阶段8: 部署
+        // 阶段10: 部署
         stage('部署') {
             when {
                 anyOf {
@@ -469,45 +457,52 @@ pipeline {
                         def deployEnv = env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' ? 'production' : 'development'
                         echo "部署到${deployEnv}环境..."
 
-                        // 停止现有服务
-                        echo '停止现有服务...'
-                        sh 'docker-compose down || true'
+                        // 注入环境变量到部署
+                        withEnv(["BACKEND_IMAGE=${env.BACKEND_IMAGE_FULL}",
+                                 "FRONTEND_WEB_IMAGE=${env.FRONTEND_WEB_IMAGE_FULL}",
+                                 "FRONTEND_ADMIN_IMAGE=${env.FRONTEND_ADMIN_IMAGE_FULL}",
+                                 "IMAGE_TAG=${env.IMAGE_TAG}"]) {
 
-                        // 清理旧镜像（可选）
-                        if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master') {
-                            echo '清理旧镜像...'
-                            sh 'docker image prune -f || true'
-                        }
+                            // 停止现有服务
+                            echo '停止现有服务...'
+                            sh 'docker-compose down || true'
 
-                        // 启动服务
-                        echo '启动服务...'
-                        if (deployEnv == 'production') {
-                            sh 'docker-compose --profile production up -d'
-                        } else {
-                            sh 'docker-compose up -d'
+                            // 清理旧镜像（可选）
+                            if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master') {
+                                echo '清理旧镜像...'
+                                sh 'docker image prune -f || true'
+                            }
+
+                            // 启动服务
+                            echo '启动服务...'
+                            if (deployEnv == 'production') {
+                                sh 'docker-compose --profile production up -d'
+                            } else {
+                                sh 'docker-compose up -d'
+                            }
                         }
 
                         // 等待服务启动
                         echo '等待服务启动...'
-                        sleep(time: 30, unit: 'SECONDS')
+                        sleep(time: 60, unit: 'SECONDS')
 
-                        // 验证部署
+                        // 验证部署（假设本地可用；如远程，可改为远程curl或健康检查工具）
                         echo '验证部署状态...'
                         def backendHealth = sh(
-                            script: 'curl -f http://localhost:8080/actuator/health || echo "unhealthy"',
+                            script: 'curl -f -s http://localhost:8080/actuator/health | grep UP || echo "unhealthy"',
                             returnStdout: true
                         ).trim()
 
-                        if (backendHealth.contains('UP') || backendHealth.contains('healthy')) {
+                        if (backendHealth.contains('UP')) {
                             echo '后端服务部署成功'
                         } else {
                             echo '警告: 后端服务可能未正常启动'
+                            currentBuild.result = 'UNSTABLE'
                         }
 
                         echo "部署到${deployEnv}环境完成"
                     } catch (Exception e) {
-                        echo "部署失败: ${e.getMessage()}"
-                        currentBuild.result = 'UNSTABLE'
+                        error "部署失败: ${e.getMessage()}"
                     }
                 }
             }
@@ -544,7 +539,7 @@ pipeline {
                 }
             }
 
-            // 清理工作空间（保留重要文件）
+            // 清理工作空间（排除重要目录）
             cleanWs(
                 cleanWhenNotBuilt: false,
                 deleteDirs: true,
@@ -553,7 +548,9 @@ pipeline {
                 patterns: [
                     [pattern: '.git', type: 'EXCLUDE'],
                     [pattern: '.m2', type: 'EXCLUDE'],
-                    [pattern: 'node_modules', type: 'EXCLUDE']
+                    [pattern: 'node_modules', type: 'EXCLUDE'],
+                    [pattern: '**/target', type: 'EXCLUDE'],  // 保留构建产物
+                    [pattern: '**/dist', type: 'EXCLUDE']    // 保留前端构建输出
                 ]
             )
         }
